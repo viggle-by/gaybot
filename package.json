@@ -1,0 +1,16 @@
+{
+  "name": "gaybot",
+  "version": "1.0.0",
+  "description": "gex",
+  "main": "chatbridge.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node ."
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "mineflayer": "^4.33.0"
+  }
+}
