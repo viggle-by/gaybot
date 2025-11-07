@@ -1,12 +1,12 @@
 const mineflayer = require('mineflayer');
-const { exec } = require('child_process');
-const readline = require('readline');
-const axios = require('axios');
+const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const { exec } = require('child_process');
+const readline = require('readline');
 const { createCanvas, loadImage } = require('canvas');
 
-// Configuration for multiple servers
+// ---------------- CONFIG ----------------
 const options = [
   {
     host: 'chipmunk.land',
@@ -25,49 +25,96 @@ const options = [
 ];
 
 const bots = [];
+const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 
-// Terminal setup for interactive commands
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout
-});
-
-// Function to download favicon and add a circle below it
+// ---------------- CREATE BOOT LOGO ----------------
 async function createBootLogo() {
-  const imageUrl = 'https://mclist.co/api/render/favicon/3e125dfce627beac43b288de125824de15e7c2164adf6a5c42b48c88eb722526.png';
-  const outputPath = path.join(__dirname, 'boot_logo.png');
+  const faviconUrl = 'https://mclist.co/api/render/favicon/3e125dfce627beac43b288de125824de15e7c2164adf6a5c42b48c88eb722526.png';
+  const faviconPath = path.join(__dirname, 'favicon.png');
 
   try {
-    const img = await loadImage(imageUrl);
-
-    const circleRadius = 50; // Circle radius
-    const padding = 20;      // Space between image and circle
-    const width = img.width;
-    const height = img.height + circleRadius * 2 + padding;
-
-    const canvas = createCanvas(width, height);
+    const img = await loadImage(faviconUrl);
+    const canvas = createCanvas(128, 128);
     const ctx = canvas.getContext('2d');
 
-    // Draw original image
-    ctx.drawImage(img, 0, 0);
+    // Transparent background
+    ctx.fillStyle = 'black';
+    ctx.fillRect(0, 0, 128, 128);
 
-    // Draw circle below image
-    ctx.fillStyle = 'red'; // Circle color
-    ctx.beginPath();
-    ctx.arc(width / 2, img.height + padding + circleRadius, circleRadius, 0, Math.PI * 2);
-    ctx.fill();
+    // Draw favicon centered
+    ctx.drawImage(img, 32, 32, 64, 64);
 
-    // Save the final image
-    const buffer = canvas.toBuffer('image/png');
-    fs.writeFileSync(outputPath, buffer);
+    // Draw "mewo"
+    ctx.fillStyle = '#00ff00';
+    ctx.font = 'bold 20px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('mewo', 64, 120);
 
-    console.log('Boot logo created with circle:', outputPath);
+    fs.writeFileSync(faviconPath, canvas.toBuffer('image/png'));
+    console.log('Boot logo created at', faviconPath);
   } catch (err) {
     console.error('Failed to create boot logo:', err);
   }
 }
 
-// Initialize bots
+// ---------------- CREATE BOOT HTML ----------------
+function createBootHTML() {
+  const htmlPath = path.join(__dirname, 'boot.html');
+  const htmlContent = `
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>GayBot Boot</title>
+<style>
+  html, body { margin:0; padding:0; width:100%; height:100%; background:black; color:#00ff00; font-family: monospace; display:flex; justify-content:center; align-items:center; flex-direction:column; }
+  #boot-logo { width:128px; height:128px; margin-bottom:20px; }
+  pre { text-align:left; max-width:90%; }
+</style>
+</head>
+<body>
+<img id="boot-logo" src="favicon.png" alt="mewo">
+<pre id="boot-text">Booting GayBot OS...
+Loading modules...
+Initializing Mineflayer...
+System ready.
+</pre>
+<pre id="neofetch"></pre>
+<script>
+async function fetchNeofetch() {
+  const res = await fetch('/neofetch');
+  const text = await res.text();
+  document.getElementById('neofetch').innerHTML = text;
+}
+fetchNeofetch();
+</script>
+</body>
+</html>
+`;
+  fs.writeFileSync(htmlPath, htmlContent);
+  console.log('Boot HTML created at', htmlPath);
+}
+
+// ---------------- START HTTP SERVER ----------------
+function startWebServer() {
+  const app = express();
+  const port = 3000;
+
+  app.use(express.static(__dirname)); // serve favicon.png and boot.html
+
+  app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'boot.html')));
+
+  app.get('/neofetch', (req, res) => {
+    exec(`docker run --rm ubuntu:24.04 bash -c "apt update && apt install -y neofetch && neofetch --stdout"`, (err, stdout, stderr) => {
+      if(err) return res.send(`<pre>Error: ${stderr}</pre>`);
+      res.send(`<pre>${stdout}</pre>`);
+    });
+  });
+
+  app.listen(port, () => console.log(`Web interface running at http://localhost:${port}`));
+}
+
+// ---------------- START MINEFLAYER BOTS ----------------
 function startBots() {
   for (const opt of options) {
     const bot = mineflayer.createBot(opt);
@@ -80,86 +127,50 @@ function startBots() {
 
     bot.on('chat', (username, message) => {
       if (username === bot.username) return;
-
       const args = message.split(' ');
       const command = args[0]?.toLowerCase();
 
       switch (command) {
         case '!help':
-          bot.chat("Commands: !neofetch, !say <msg>, !netmsg <msg>, !curl, !wget");
-          break;
-
-        case '!neofetch':
-          exec('neofetch --stdout', (err, stdout, stderr) => {
-            if (err) {
-              bot.chat("You seem to have not installed neofetch. Please install neofetch.");
-              console.error(stderr);
-              return;
-            }
-            const lines = stdout.trim().split('\n');
-            lines.forEach(line => {
-              if (line.length > 0) bot.chat(line.slice(0, 256));
-            });
-          });
+          bot.chat("Commands: !say <msg>, !netmsg <msg>");
           break;
 
         case '!say':
-          const text = args.slice(1).join(' ');
-          bot.chat(text || "Usage: !say <message>");
+          bot.chat(args.slice(1).join(' ') || "Usage: !say <message>");
           break;
 
         case '!netmsg':
-          const msg = args.slice(1).join(' ');
-          if (!msg) {
-            bot.chat("Usage: !netmsg <message>");
-            return;
-          }
-
           const other = bots.find(b => b.bot !== bot);
           if (!other) {
             bot.chat("No other server connection found.");
             return;
           }
-
+          const msg = args.slice(1).join(' ');
           other.bot.chat(`[${opt.showIpAs}] ${msg}`);
           bot.chat(`Sent message to ${other.info.showIpAs}`);
-          break;
-
-        case '!curl':
-        case '!wget':
-          bot.chat("Fake network request complete.");
-          break;
-
-        default:
           break;
       }
     });
 
-    bot.on('death', () => {
-      bot.chat("You seem to kill mineflayer bots. Please stop killing mineflayer bots.");
-      console.log(`[${opt.showIpAs}] Bot died.`);
-    });
-
-    bot.on('error', err => console.error(`[${opt.showIpAs}] Error:`, err.message));
+    bot.on('death', () => bot.chat("Sybau."));
+    bot.on('error', err => console.error(`[${opt.showIpAs}] i use arch btw`, err.message));
     bot.on('end', () => console.log(`[${opt.showIpAs}] Disconnected.`));
   }
 }
 
-// Terminal input to interact with bots manually
+// ---------------- TERMINAL INPUT ----------------
 rl.on('line', (input) => {
   const [botIndex, ...cmd] = input.split(' ');
   const idx = parseInt(botIndex);
-  if (isNaN(idx) || !bots[idx]) {
-    console.log('Invalid bot index. Format: <botIndex> <message>');
-    return;
-  }
+  if (isNaN(idx) || !bots[idx]) return console.log('Invalid bot index.');
   bots[idx].bot.chat(cmd.join(' '));
 });
 
-// Main boot process
+// ---------------- MAIN BOOT ----------------
 (async () => {
   console.log('gaybot is booting...');
   await createBootLogo();
-  console.log('Starting bots...');
+  createBootHTML();
+  startWebServer();
   startBots();
 })();
