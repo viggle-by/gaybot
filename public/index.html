@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>GayBot Viewer + Chat</title>
+  <style>
+    body { margin: 0; overflow: hidden; background: black; color: white; font-family: monospace; }
+    #chat { position: absolute; bottom: 0; left: 0; width: 100%; max-height: 200px; overflow-y: scroll; background: rgba(0,0,0,0.7); padding: 5px; }
+    #chat input { width: 100%; box-sizing: border-box; background: black; color: white; border: 1px solid white; padding: 5px; font-family: monospace; }
+  </style>
+</head>
+<body>
+  <canvas id="viewer" width="800" height="600"></canvas>
+  <div id="chat">
+    <div id="messages"></div>
+    <input id="chatInput" type="text" placeholder="Type a message..."/>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+
+    const messagesDiv = document.getElementById('messages');
+    const chatInput = document.getElementById('chatInput');
+
+    socket.on('chat', msg => {
+      const div = document.createElement('div');
+      div.innerHTML = msg;
+      messagesDiv.appendChild(div);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    });
+
+    chatInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && chatInput.value.trim() !== '') {
+        socket.emit('sendMessage', chatInput.value);
+        chatInput.value = '';
+      }
+    });
+
+    // Keyboard control
+    window.addEventListener('keydown', e => {
+      switch(e.key.toLowerCase()) {
+        case 'w': socket.emit('setKey', { key:'forward', state:true }); break;
+        case 's': socket.emit('setKey', { key:'back', state:true }); break;
+        case 'a': socket.emit('setKey', { key:'left', state:true }); break;
+        case 'd': socket.emit('setKey', { key:'right', state:true }); break;
+        case ' ': socket.emit('setKey', { key:'jump', state:true }); break;
+        case 'shift': socket.emit('setKey', { key:'sprint', state:true }); break;
+      }
+    });
+
+    window.addEventListener('keyup', e => {
+      switch(e.key.toLowerCase()) {
+        case 'w': socket.emit('setKey', { key:'forward', state:false }); break;
+        case 's': socket.emit('setKey', { key:'back', state:false }); break;
+        case 'a': socket.emit('setKey', { key:'left', state:false }); break;
+        case 'd': socket.emit('setKey', { key:'right', state:false }); break;
+        case ' ': socket.emit('setKey', { key:'jump', state:false }); break;
+        case 'shift': socket.emit('setKey', { key:'sprint', state:false }); break;
+      }
+    });
+  </script>
+</body>
+</html>
